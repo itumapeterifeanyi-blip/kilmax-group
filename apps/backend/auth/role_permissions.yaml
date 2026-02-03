@@ -1,0 +1,139 @@
+permissions:
+  - auth.login
+  - auth.refresh
+  - profile.read
+  - profile.update.own
+
+  - delivery_request.create
+  - delivery_request.view.own
+  - delivery_request.view.any
+  - delivery_request.update.own
+  - delivery_request.update.internal
+  - delivery_request.cancel.own
+  - delivery_request.refund
+
+  - delivery_batch.create
+  - delivery_batch.view.any
+  - delivery_batch.view.assigned
+  - delivery_batch.update.status
+  - delivery_batch.assign
+  - delivery_batch.split
+
+  - batch_stop.update.status
+  - batch_stop.reorder
+
+  - driver.view
+  - driver.manage
+  - vehicle.view
+  - vehicle.manage
+
+  - branch.view
+  - branch.manage
+
+  - price.view
+  - price.manage
+
+  - transaction.create
+  - transaction.view
+  - transaction.reconcile
+
+  - feedback.create
+  - feedback.view
+
+  - admin_user.manage
+  - audit.view
+  - reports.view
+  - reports.export
+
+roles:
+  customer:
+    - auth.login
+    - auth.refresh
+    - profile.read
+    - profile.update.own
+    - delivery_request.create
+    - delivery_request.view.own
+    - delivery_request.cancel.own
+    - feedback.create
+    - feedback.view
+
+  driver:
+    - auth.login
+    - auth.refresh
+    - profile.read
+    - profile.update.own
+    - delivery_request.view.assigned
+    - delivery_batch.view.assigned
+    - delivery_batch.update.status
+    - batch_stop.update.status
+    - driver.view
+    - vehicle.view
+    - feedback.create
+
+  staff:
+    - auth.login
+    - auth.refresh
+    - profile.read
+    - profile.update.own
+    - delivery_request.create
+    - delivery_request.view.any
+    - delivery_request.update.internal
+    - delivery_request.refund
+    - delivery_batch.create
+    - delivery_batch.view.any
+    - delivery_batch.split
+    - delivery_batch.update.status
+    - batch_stop.reorder
+    - batch_stop.update.status
+    - driver.manage
+    - vehicle.manage
+    - price.view
+    - transaction.create
+    - transaction.view
+    - feedback.view
+    - reports.view
+
+  manager:
+    - auth.login
+    - auth.refresh
+    - profile.read
+    - profile.update.own
+    - delivery_request.view.any
+    - delivery_request.update.internal
+    - delivery_batch.create
+    - delivery_batch.view.any
+    - delivery_batch.assign
+    - delivery_batch.split
+    - delivery_batch.update.status
+    - batch_stop.update.status
+    - driver.manage
+    - vehicle.manage
+    - branch.manage
+    - price.manage
+    - transaction.reconcile
+    - audit.view
+    - reports.export
+    - reports.view
+
+  owner:
+    - auth.login
+    - auth.refresh
+    - profile.read
+    - profile.update.own
+    - delivery_request.view.any
+    - delivery_request.update.internal
+    - delivery_batch.create
+    - delivery_batch.view.any
+    - delivery_batch.assign
+    - delivery_batch.split
+    - delivery_batch.update.status
+    - batch_stop.update.status
+    - driver.manage
+    - vehicle.manage
+    - branch.manage
+    - price.manage
+    - transaction.reconcile
+    - admin_user.manage
+    - audit.view
+    - reports.export
+    - reports.view

@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Prisma models derived from final_schema.sql
+
+// Enums
+enum UserRole {
+  customer
+  driver
+  staff
+  manager
+  owner
+}
+
+enum DeliveryRequestStatus {
+  pending
+  confirmed
+  scheduled
+  assigned
+  in_transit
+  delivered
+  failed
+  cancelled
+  refunded
+}
+
+enum DeliveryBatchStatus {
+  draft
+  ready
+  scheduled
+  in_progress
+  completed
+  cancelled
+}
+
+enum BatchStopStatus {
+  pending
+  en_route
+  arrived
+  delivered
+  failed
+  skipped
+}
+
+enum TransactionType {
+  payment
+  refund
+  payout
+  fee
+  adjustment
+}
+
+enum TransactionStatus {
+  pending
+  posted
+  reconciled
+  failed
+}
+
+enum VehicleStatus {
+  available
+  assigned
+  in_service
+  out_of_service
+}
+
+enum DriverStatus {
+  active
+  inactive
+  suspended
+}
+
+enum PriceUnit {
+  per_cylinder
+  per_kg
+  flat
+}
+
+model Branch {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  address   String
+  city      String?
+  state     String?
+  country   String   @default("NG")
+  phone     String?
+  email     String?
+  is_active Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  metadata  Json?
+
+  zones     Zone[]
+  vehicles  Vehicle[]
+  prices    Price[]
+  batches   DeliveryBatch[]
+
+  @@map("branches")
+}
+
+model Zone {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branch_id              String
+  name                   String
+  delivery_fee_multiplier Decimal? @db.Decimal(10,4)
+  is_active              Boolean  @default(true)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @default(now())
+  metadata               Json?
+
+  branch                 Branch   @relation(fields: [branch_id], references: [id])
+  prices                 Price[]
+  delivery_requests      DeliveryRequest[]
+  delivery_batches       DeliveryBatch[]
+
+  @@unique([branch_id, name])
+  @@map("zones")
+}
+
+model Customer {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  external_id    String?
+  full_name      String
+  phone          String
+  password_hash  String?
+  last_login     DateTime?
+  email          String?
+  default_address String?
+  default_zone_id String?
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now())
+  metadata       Json?
+
+  delivery_requests DeliveryRequest[]
+  feedbacks         Feedback[]
+
+  @@map("customers")
+}
+
+model Vehicle {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plate_number  String?  @unique
+  vehicle_type  String?
+  capacity_units Int     @default(0)
+  status        VehicleStatus @default(available)
+  branch_id     String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now())
+  metadata      Json?
+
+  branch        Branch?  @relation(fields: [branch_id], references: [id])
+  drivers       Driver[] @relation("VehicleDrivers")
+  batches       DeliveryBatch[]
+  assignments   BatchAssignment[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name       String
+  phone           String
+  password_hash   String?
+  last_login      DateTime?
+  email           String?
+  license_number  String?
+  status          DriverStatus @default(active)
+  current_vehicle_id String?
+  is_available    Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now())
+  metadata        Json?
+
+  current_vehicle Vehicle? @relation("VehicleDrivers", fields: [current_vehicle_id], references: [id])
+  assignments     BatchAssignment[]
+
+  @@map("drivers")
+}
+
+model Price {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branch_id    String
+  zone_id      String?
+  price_unit   PriceUnit @default(per_cylinder)
+  unit_amount  Decimal  @db.Decimal(12,2)
+  currency     String   @default("NGN")
+  effective_from DateTime @default(now())
+  effective_to DateTime?
+  created_at   DateTime @default(now())
+  created_by   Json?
+  metadata     Json?
+
+  branch       Branch   @relation(fields: [branch_id], references: [id])
+  zone         Zone?    @relation(fields: [zone_id], references: [id])
+  delivery_requests DeliveryRequest[]
+
+  @@map("prices")
+  @@index([branch_id, zone_id], map: "idx_prices_branch_zone")
+}
+
+model AdminUser {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name  String
+  email      String   @unique
+  password_hash String
+  role       UserRole @default(staff)
+  is_active  Boolean  @default(true)
+  last_login DateTime?
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  metadata   Json?
+
+  @@map("admin_users")
+}
+
+model DeliveryRequest {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  external_ref       String?  @unique
+  customer_id        String
+  branch_id          String?
+  zone_id            String?
+  price_id           String?
+  quantity           Int      @default(1)
+  address            String
+  latitude           Decimal? @db.Decimal(10,7)
+  longitude          Decimal? @db.Decimal(10,7)
+  contact_name       String?
+  contact_phone      String?
+  delivery_window_start DateTime?
+  delivery_window_end DateTime?
+  cut_off_time       DateTime?
+  requested_at       DateTime @default(now())
+  status             DeliveryRequestStatus @default(pending)
+  payment_status     String? @default("unpaid")
+  payment_method     String?
+  gross_amount       Decimal @db.Decimal(12,2)
+  currency           String  @default("NGN")
+  tax_amount         Decimal? @db.Decimal(12,2)
+  discount_amount    Decimal? @db.Decimal(12,2)
+  total_amount       Decimal @db.Decimal(12,2)
+  notes              String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @default(now())
+  audit_actor        Json?
+  metadata           Json?
+
+  customer           Customer @relation(fields: [customer_id], references: [id])
+  branch             Branch?  @relation(fields: [branch_id], references: [id])
+  zone               Zone?    @relation(fields: [zone_id], references: [id])
+  price              Price?   @relation(fields: [price_id], references: [id])
+  batch_stop         BatchStop?
+  transactions       Transaction[]
+  feedbacks          Feedback[]
+
+  @@map("delivery_requests")
+  @@index([status], map: "idx_delivery_requests_status")
+  @@index([cut_off_time], map: "idx_delivery_requests_cutoff")
+}
+
+model DeliveryBatch {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batch_ref            String?  @unique
+  branch_id            String?
+  zone_id              String?
+  scheduled_date       DateTime @db.Date
+  delivery_window_start DateTime?
+  delivery_window_end  DateTime?
+  cutoff_time          DateTime?
+  vehicle_id           String?
+  capacity_units       Int      @default(0)
+  used_units           Int      @default(0)
+  max_stops            Int?
+  status               DeliveryBatchStatus @default(draft)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @default(now())
+  created_by           Json?
+  metadata             Json?
+
+  branch               Branch?  @relation(fields: [branch_id], references: [id])
+  zone                 Zone?    @relation(fields: [zone_id], references: [id])
+  vehicle              Vehicle? @relation(fields: [vehicle_id], references: [id])
+  stops                BatchStop[]
+  assignments          BatchAssignment[]
+  transactions         Transaction[]
+
+  @@map("delivery_batches")
+  @@index([status, scheduled_date], map: "idx_batches_status_date")
+}
+
+model BatchStop {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delivery_batch_id  String
+  delivery_request_id String
+  stop_order         Int
+  scheduled_time     DateTime?
+  arrival_time       DateTime?
+  completed_at       DateTime?
+  status             BatchStopStatus @default(pending)
+  failure_reason     String?
+  distance_meters    Int?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @default(now())
+  metadata           Json?
+
+  delivery_batch     DeliveryBatch @relation(fields: [delivery_batch_id], references: [id])
+  delivery_request   DeliveryRequest @relation(fields: [delivery_request_id], references: [id])
+
+  @@unique([delivery_batch_id, stop_order])
+  @@unique([delivery_batch_id, delivery_request_id])
+  @@map("batch_stops")
+  @@index([delivery_batch_id, stop_order], map: "idx_batch_stops_batch_order")
+}
+
+model BatchAssignment {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delivery_batch_id String
+  driver_id        String?
+  vehicle_id       String?
+  assigned_at      DateTime @default(now())
+  assigned_by      Json?
+  notes            String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now())
+  metadata         Json?
+
+  delivery_batch   DeliveryBatch @relation(fields: [delivery_batch_id], references: [id])
+  driver           Driver? @relation(fields: [driver_id], references: [id])
+  vehicle          Vehicle? @relation(fields: [vehicle_id], references: [id])
+
+  @@unique([delivery_batch_id, driver_id])
+  @@unique([delivery_batch_id, vehicle_id])
+  @@map("batch_assignments")
+}
+
+model Transaction {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  related_delivery_request_id String?
+  related_delivery_batch_id  String?
+  transaction_type          TransactionType
+  transaction_status        TransactionStatus @default(pending)
+  gross_amount              Decimal @db.Decimal(12,2)
+  cost_amount               Decimal? @db.Decimal(12,2)
+  platform_fee              Decimal? @db.Decimal(12,2)
+  owner_share               Decimal? @db.Decimal(12,2)
+  net_amount               Decimal @db.Decimal(12,2)
+  currency                  String  @default("NGN")
+  occurred_at               DateTime @default(now())
+  reconciled                Boolean @default(false)
+  reconciled_at             DateTime?
+  created_at                DateTime @default(now())
+  created_by                Json?
+  metadata                  Json?
+
+  delivery_request          DeliveryRequest? @relation(fields: [related_delivery_request_id], references: [id])
+  delivery_batch            DeliveryBatch? @relation(fields: [related_delivery_batch_id], references: [id])
+
+  @@map("transactions")
+  @@index([related_delivery_batch_id, related_delivery_request_id], map: "idx_transactions_related")
+}
+
+model Feedback {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delivery_request_id String
+  customer_id        String?
+  rating             Int?
+  comment            String?
+  created_at         DateTime @default(now())
+  metadata           Json?
+
+  delivery_request   DeliveryRequest @relation(fields: [delivery_request_id], references: [id])
+  customer           Customer? @relation(fields: [customer_id], references: [id])
+
+  @@map("feedback")
+  @@index([delivery_request_id], map: "idx_feedback_delivery_request")
+}
+
